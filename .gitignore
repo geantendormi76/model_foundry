@@ -1,0 +1,100 @@
+# =================================================================
+# Project Specific - VERY IMPORTANT
+# =================================================================
+# Python Virtual Environment (as seen in your logs)
+.venv-uv-rag/
+
+# All models (LLMs, Embeddings, Rerankers, etc.)
+models/
+
+# All stored data (ChromaDB, BM25, KG, etc.)
+datasets/processed
+datasets/raw
+datasets/reports
+# All raw source documents for the knowledge base
+data/raw_documents/
+
+# Local database files
+*.db
+*.sqlite3
+
+# Log files
+*.log
+logs/
+
+# =================================================================
+# Python General
+# =================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# =================================================================
+# Unit test / coverage reports
+# =================================================================
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# =================================================================
+# Environments and Secrets - DO NOT COMMIT
+# =================================================================
+.env
+.envrc
+
+# =================================================================
+# IDE / Editor specific
+# =================================================================
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# =================================================================
+# OS specific
+# =================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.env
+.jsonl
