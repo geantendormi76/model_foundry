@@ -1,4 +1,3 @@
-```markdown
 # zhzAI - “小脑计划” (Project Cerebellum) 微模型铸造厂
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -95,4 +94,3 @@
 ## 展望未来
 
 “小脑计划”的成功收官，为zhzAI的混合智能架构打下了最坚实的基础。下一步，我们将启动**“核心大脑移植”**计划，将这两个高精度、可信赖的微模型集成到主项目的Rust后端中，以实现更智能、更高效、更可靠的用户意图调度。
-```
