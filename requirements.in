@@ -1,0 +1,26 @@
+# /home/zhz/zhzai/model_foundry/requirements.in
+
+# --- 核心依赖 ---
+# 用于数据处理和科学计算
+pandas
+numpy
+scikit-learn
+
+# --- AI 与模型相关 ---
+# Google Gemini API
+google-generativeai
+# ONNX 模型导出与推理
+skl2onnx
+onnxruntime
+# 深度去重
+datasketch
+# 语义分析 (会附带安装 PyTorch)
+sentence-transformers
+# 中文分词
+jieba
+
+# --- 工具类 ---
+# 命令行进度条
+tqdm
+# 读取 .env 文件
+python-dotenv
