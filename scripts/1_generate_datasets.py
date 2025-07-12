@@ -11,6 +11,8 @@ import google.generativeai as genai
 from tqdm import tqdm
 from dotenv import load_dotenv
 
+# --- 核心修改 1: 导入外部“宪法” ---
+from prompt_constitutions import IS_QUESTION_CONSTITUTION, CONFIRMATION_CONSTITUTION
 
 # 加载 .env 文件中的环境变量
 load_dotenv()
@@ -43,59 +45,7 @@ REQUESTS_PER_MINUTE = 15
 TARGET_SAMPLES_PER_TASK = 5000  # 每个任务的目标样本数
 SAMPLES_PER_REQUEST = 25      # 每次API请求生成多少个样本
 
-# --- Prompt 设计区 (全中文优化版) ---
 
-# 任务1: IsQuestionClassifier 的Prompt
-IS_QUESTION_PROMPT = f"""
-你是一位为机器学习分类器生成训练数据的专家。
-你的任务是为个人AI助手生成一系列多样化的用户输入文本。
-对于每一条文本，你必须为其分配一个分类标签：“Question”（问题）或“Statement”（陈述）。
-
-- “Question”标签：适用于任何明确或隐含的提问。包括以“什么”、“怎么”、“谁”、“何时”、“哪里”、“为什么”开头的句子，或以问号结尾的句子。也包括那些暗示了问题的短语，例如“给我讲讲...”、“查一下...”。
-- “Statement”标签：适用于任何陈述句、命令、笔记或个人想法。包括像“帮我记一下...”、“提醒我...”这样的命令，或者像“今天天气不错”这样的简单事实。
-
-**核心指令:** 
-1.  **精确生成 {SAMPLES_PER_REQUEST} 条**独一无二的示例。
-2.  输出**必须是**一个严格合法的JSON数组，数组中的每个对象都包含 "text" 和 "label" 两个键。
-3.  除了这个JSON数组，**不要包含任何**额外的解释、Markdown标记或其他任何文字。
-4.  确保“Question”和“Statement”两种标签的数量大致均衡。
-5.  所有生成的文本都必须是**中文简体**。
-
-**输出格式示例:**
-[
-  {{"text": "明天下午有什么安排？", "label": "Question"}},
-  {{"text": "帮我记一下，项目Alpha的核心技术是分布式图计算。", "label": "Statement"}},
-  ...
-]
-"""
-
-# 任务2: ConfirmationClassifier 的Prompt
-CONFIRMATION_PROMPT = f"""
-你是一位为机器学习分类器生成训练数据的专家。
-场景是：一个AI助手向用户提出了一个确认请求（例如：“您确定要删除这条记忆吗？”）。
-你的任务是生成一系列用户可能会如何回复的、多样化的例子。
-对于每一条回复，你必须为其分配一个分类标签：“Affirm”（肯定）或“Deny”（否定）。
-
-- “Affirm”标签：用户表示同意、确认或肯定的回复。这也包括那些在确认的同时提供了新信息的回复，例如：“是的，把它改成明天”。
-- “Deny”标签：用户表示不同意、取消、否定的回复，或者给出了一个完全不相关的答复。
-
-**核心指令:**
-1.  **精确生成 {SAMPLES_PER_REQUEST} 条**独一无二的示例。
-2.  输出**必须是**一个严格合法的JSON数组，数组中的每个对象都包含 "text" 和 "label" 两个键。
-3.  除了这个JSON数组，**不要包含任何**额外的解释、Markdown标记或其他任何文字。
-4.  确保“Affirm”和“Deny”两种标签的数量大致均衡。
-5.  所有生成的文本都必须是**中文简体**。
-
-**输出格式示例:**
-[
-  {{"text": "是的，继续吧", "label": "Affirm"}},
-  {{"text": "先别，我再想想", "label": "Deny"}},
-  {{"text": "改成下周五", "label": "Affirm"}},
-  ...
-]
-"""
-
-# --- 核心逻辑 (全新重构) ---
 
 generation_config = genai.GenerationConfig(
     temperature=1.0, top_p=0.95, top_k=64, response_mime_type="application/json",
@@ -198,20 +148,23 @@ async def generate_data_for_task(task_name: str, prompt: str, target_samples: in
 
 async def main():
     os.makedirs("../datasets/raw", exist_ok=True)
+    
+    # --- 核心修改 3: 使用从外部导入的“宪法”函数来动态生成Prompt ---
     tasks_to_run = [
         {
-            "task_name": "IsQuestionClassifier (问题/陈述分类器)", # 'name' -> 'task_name'
-            "prompt": IS_QUESTION_PROMPT,
-            "target_samples": TARGET_SAMPLES_PER_TASK,      # 'target' -> 'target_samples'
-            "output_file": "../datasets/raw/is_question_dataset.jsonl" # 'output' -> 'output_file'
+            "task_name": "IsQuestionClassifier (问题/陈述分类器)",
+            "prompt": IS_QUESTION_CONSTITUTION(SAMPLES_PER_REQUEST), # 动态调用
+            "target_samples": TARGET_SAMPLES_PER_TASK,
+            "output_file": "../datasets/raw/is_question_dataset.jsonl"
         },
         {
             "task_name": "ConfirmationClassifier (肯定/否定分类器)",
-            "prompt": CONFIRMATION_PROMPT,
+            "prompt": CONFIRMATION_CONSTITUTION(SAMPLES_PER_REQUEST), # 动态调用
             "target_samples": TARGET_SAMPLES_PER_TASK,
             "output_file": "../datasets/raw/confirmation_dataset.jsonl"
         }
     ]
+    
     start_time = time.time()
     for task_info in tasks_to_run:
         await generate_data_for_task(**task_info)
