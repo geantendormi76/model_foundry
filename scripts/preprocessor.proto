@@ -1,0 +1,18 @@
+// backend/micromodels/src/proto/preprocessor.proto
+syntax = "proto3";
+
+package micromodels;
+
+// 定义单个TF-IDF特征集的数据结构
+message TfidfFeatureData {
+  // 有序的词汇表，其顺序与idf_weights严格对应
+  repeated string vocabulary = 1;
+  // 有序的IDF权重
+  repeated float idf_weights = 2;
+}
+
+// 定义完整的预处理器数据，包含词和字符两个特征集
+message PreprocessorData {
+  TfidfFeatureData word_features = 1;
+  TfidfFeatureData char_features = 2;
+}
