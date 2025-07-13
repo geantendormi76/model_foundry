@@ -24,3 +24,5 @@ jieba
 tqdm
 # 读取 .env 文件
 python-dotenv
+# 用于编译.proto文件的核心工具
+grpcio-tools
