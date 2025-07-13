@@ -60,14 +60,10 @@
         GEMINI_API_KEYS=your_api_key_1,your_api_key_2
         ```
 
-2.  **为Rust项目提供“数据契约”**
-    -   这是一个**一次性**的手动步骤，用于连接Python和Rust两个项目。
-    -   将zhzAI主项目`backend/micromodels/src/proto/preprocessor.proto`文件，复制到本项目的`scripts/`目录下。
-
-3.  **清理旧数据 (可选，推荐用于完全重建)**
+2.  **清理旧数据 (可选，推荐用于完全重建)**
     -   为了保证从一个纯净的状态开始，建议删除`datasets/`和`models/`目录下的所有旧文件。
 
-4.  **执行流水线**
+3.  **执行流水线**
     -   请严格按照以下顺序，在`scripts/`目录下执行脚本：
     
     ```bash
