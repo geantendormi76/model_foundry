@@ -1,7 +1,9 @@
+
 # zhzAI - “小脑计划” (Project Cerebellum) 微模型铸造厂
 
 <p align="center">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+  <img src="https://img.shields.io/badge/Python-3.9+-blue.svg" alt="Python Version">
 </p>
 
 <p align="center">
@@ -53,31 +55,9 @@
 
 ---
 
-## 🛠️ 架构与流水线 (Architecture & Pipeline)
+## ⚙️ 快速上手：复现并测试现有模型
 
-本铸造厂采用“蓝图(Blueprints) + 引擎(Engine) + 主控(Controller)”的模块化架构。
-
-| 阶段 (Stage)       | 核心引擎 (Engine Module)                | 职责 (Responsibility)                                                |
-| ------------------ | --------------------------------------- | -------------------------------------------------------------------- |
-| 1. 数据生成        | `foundry_engine/data_generator.py`      | 读取蓝图“宪法”，调用大模型API，高效、并发地挖掘海量原始训练数据。     |
-| 2. 数据精炼        | `foundry_engine/data_refiner.py`        | 对原始数据进行深度清洗、去重、平衡和规范化，并产出详细的数据质量报告。 |
-| 3. 模型训练        | `foundry_engine/trainers/*_trainer.py`  | 根据蓝图配置，调用相应的训练器，培育特定架构的模型。                 |
-| 4. 预处理器导出    | `foundry_engine/exporter.py`            | 将Python预处理器中的核心数据，序列化为跨语言的`.bin` (Protobuf) 文件。 |
-
----
-
-## 📦 最终产出物 (Artifacts)
-
-流水线成功运行后，您将在`models/`目录中找到最终的、可部署到任何地方的产品。对于每个任务（如`is_question`），您会得到：
-
--   `is_question_classifier.onnx`: ONNX格式的模型文件。
--   `is_question_preprocessor.bin`: Protobuf格式的预处理器数据文件。
-
----
-
-## ⚙️ 如何从零开始，铸造并唤醒你的第一个微模型
-
-这是一个完整的、开箱即用的实践教程。
+这是一个开箱即用的实践教程，让您在5分钟内体验铸造厂的威力。
 
 ### 1. 环境设置
 
@@ -104,11 +84,9 @@
 # 这将为 "text_classification" 蓝图下的所有任务，完整地执行从数据生成到模型导出的所有步骤。
 python main.py --blueprint text_classification
 ```
+> **提示:** 如果您已经有`datasets/raw`下的原始数据，流水线会自动跳过数据生成阶段，为您节省时间和API成本。
 
-> **高级用法:** 您可以使用`--steps`参数来执行特定的步骤，例如，如果您只想重新训练和导出模型：
-> `python main.py --blueprint text_classification --steps=train,export`
-
-恭喜！您已经成功铸造出了两个高精度的微模型，它们的所有必需文件都已位于`models/`目录下。
+恭喜！您已经成功铸造出了两个高精度的微模型（`is_question` 和 `confirmation`），它们的所有必需文件都已位于`models/`目录下。
 
 ### 3. 唤醒并与你的模型对话！
 
@@ -132,20 +110,111 @@ python main.py --blueprint text_classification
 
     > 帮我记一下明天的会议
       模型预测 ->: **Statement**
+    ```
+---
 
-    > q
-    ```
-    
-    输入`q`后，程序会自动进入“肯定/否定”分类器的测试环节。
-    
-    ```
-    --- 任务2: “肯定/否定”分类器测试 ---
-    现在，模拟AI向您确认，请输入您的回答 (输入'q'退出):
-    > 没错，就这么办
-      模型预测 ->: **Affirm**
+## 开发者指南：如何铸造你自己的微模型
 
-    > 等等，先别
-      模型预测 ->: **Deny**
-    
-    > q
-    ```
+这才是铸造厂的真正威力所在！我们将以创建一个全新的“**情感分析分类器**”为例，一步步教您如何扩展。
+
+### 第1步: 创建你的蓝图
+
+在`blueprints/`目录下，为您要创造的模型家族新建一个文件夹。
+
+```bash
+mkdir blueprints/sentiment_analysis
+```
+
+### 第2步: 撰写你的“宪法”
+
+在`blueprints/sentiment_analysis/`目录下，创建一个`constitution.py`文件。这是您模型灵魂的所在，您将在这里教会大模型如何为您生成数据。
+
+**`blueprints/sentiment_analysis/constitution.py` 文件内容示例:**
+```python
+# blueprints/sentiment_analysis/constitution.py
+def SENTIMENT_ANALYSIS_CONSTITUTION(samples_per_request: int) -> str:
+    """为情感分析分类器生成数据的“宪法”。"""
+    return f\"\"\"
+你是一位为机器学习分类器生成训练数据的专家。
+你的任务是生成一系列包含明确情感倾向的中文评论文本。
+对于每一条文本，你必须为其分配一个分类标签：“Positive” (正面), “Negative” (负面), 或 “Neutral” (中性)。
+
+**标签定义:**
+- `Positive`: 包含明确的赞美、喜爱、满意等积极情绪。 (例如: "这款产品太棒了，强烈推荐！")
+- `Negative`: 包含明确的批评、失望、不满等消极情绪。 (例如: "体验非常糟糕，不会再来了。")
+- `Neutral`: 只是在陈述一个客观事实，没有明显的情感色彩。 (例如: "这个包裹是昨天下午送达的。")
+
+**核心指令:**
+1.  **精确生成 {samples_per_request} 条**独一无二的示例。
+2.  输出**必须是**一个严格合法的JSON数组，每个对象包含 "text" 和 "label" 两个键。
+3.  除了JSON数组，不要包含任何额外的文字。
+4.  确保三种标签的数量大致均衡。
+\"\"\"
+```
+
+### 第3步: 配置你的蓝图
+
+在`blueprints/sentiment_analysis/`目录下，创建一个`config.py`文件。它就像是您生产线的控制面板。
+
+**`blueprints/sentiment_analysis/config.py` 文件内容示例:**
+```python
+# blueprints/sentiment_analysis/config.py
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = BASE_DIR / "datasets"
+MODELS_DIR = BASE_DIR / "models"
+
+# 关键：定义这个蓝图包含的任务
+TASKS = {
+    "sentiment": { # 这是你给模型起的名字
+        "constitution_func_name": "SENTIMENT_ANALYSIS_CONSTITUTION",
+        "valid_labels": {"Positive", "Negative", "Neutral"},
+    }
+}
+
+# 复用或自定义其他配置
+# 这里我们直接复用 text_classification 的配置
+from blueprints.text_classification.config import GENERATOR_CONFIG, REFINER_CONFIG, TRAINER_CONFIG
+```
+
+### 第4步: 链接你的训练器
+
+打开根目录下的 `main.py` 文件，找到训练阶段的逻辑，告诉主控程序：当遇到`sentiment_analysis`蓝图时，应该使用哪个训练器。
+
+由于情感分析也是一种文本分类，我们可以**复用**现有的`tfidf_classifier_trainer`。
+
+**修改 `main.py`:**
+```python
+# ... 在 main.py 中找到这部分 ...
+    if "train" in steps_to_run:
+        print("\\n--- [阶段 3/4] 执行训练引擎 ---")
+        # 在这里添加一个新的 elif 条件
+        if args.blueprint == "text_classification" or args.blueprint == "sentiment_analysis":
+            from foundry_engine.trainers import tfidf_classifier_trainer
+            tfidf_classifier_trainer.run(config_module)
+        elif args.blueprint == "sequence_tagging_ner":
+            print("[提示] BiLSTM-CRF 训练器尚未实现。跳过此步骤。")
+        # ...```
+
+### 第5步: 铸造！
+
+一切就绪！现在，用一条命令铸造您的全新情感分析模型：
+
+```bash
+python main.py --blueprint sentiment_analysis
+```
+流水线会自动执行所有步骤，最终在`models/`目录下生成`sentiment_classifier.onnx`和`sentiment_preprocessor.bin`！
+
+### 第6步: 唤醒你的新模型
+
+最后，修改`scripts/interactive_tester.py`，让它加载并测试您的新模型，亲眼见证您的创造！
+
+---
+## 架构展望：添加新训练器
+
+当您需要引入像`BiLSTM-CRF`这样的全新模型架构时，只需：
+1.  在`foundry_engine/trainers/`下创建一个新的训练器文件，如`bilstm_crf_trainer.py`。
+2.  在`main.py`中添加对应的`elif`逻辑来调用它。
+
+本铸造厂的模块化设计，旨在让这类扩展变得轻松而愉快。
