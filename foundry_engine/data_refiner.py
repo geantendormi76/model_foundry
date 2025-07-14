@@ -1,4 +1,4 @@
-# foundry_engine/data_refiner.py
+# foundry_engine/data_refiner.py (V4 - 最终修正版)
 
 import os
 import re
@@ -10,104 +10,103 @@ from datetime import datetime
 from sklearn.model_selection import train_test_split
 from datasketch import MinHash, MinHashLSH
 from sentence_transformers import SentenceTransformer, util
-from typing import Type, Dict, Set
+from typing import Type, Dict, Set, List, Tuple
 
-# --- 辅助函数 (保持不变，但设为私有) ---
-def _deep_deduplication(df: pd.DataFrame, config: Dict) -> pd.DataFrame:
-    print("  - 阶段A: 深度去重...")
-    initial_count = len(df)
-    df.drop_duplicates(subset=['text'], inplace=True)
-    exact_deduped_count = len(df)
-    print(f"    - 精确去重: 移除了 {initial_count - exact_deduped_count} 条完全重复的样本。")
+# --- NER专属辅助函数 ---
+def _normalize_ner_data(df: pd.DataFrame) -> pd.DataFrame:
+    """强制将NER数据中的tokens规范化为单字，并智能修正tags。"""
+    print("  - 阶段B: [NER专属] 规范化数据，强制单字分词...")
+    fixed_rows = []
+    for _, row in df.iterrows():
+        new_tokens, new_tags = [], []
+        # 增加对数据类型的校验，以应对API可能返回的非列表格式
+        if not isinstance(row.get('tokens'), list) or not isinstance(row.get('tags'), list):
+            continue # 跳过格式错误的行
+        for token, tag in zip(row['tokens'], row['tags']):
+            if len(token) == 1:
+                new_tokens.append(token)
+                new_tags.append(tag)
+            else:
+                new_tokens.append(token[0])
+                new_tags.append(tag)
+                for char in token[1:]:
+                    new_tokens.append(char)
+                    if tag.startswith('B-'):
+                        new_tags.append('I-' + tag[2:])
+                    else:
+                        new_tags.append(tag)
+        fixed_rows.append({'tokens': new_tokens, 'tags': new_tags})
+    print(f"    - 规范化完成。")
+    return pd.DataFrame(fixed_rows)
 
-    lsh = MinHashLSH(threshold=config["DEDUPE_THRESHOLD"], num_perm=config["DEDUPE_NUM_PERM"])
-    minhashes = {}
-    for index, row in df.iterrows():
-        minhash = MinHash(num_perm=config["DEDUPE_NUM_PERM"])
-        for word in set(row['text'].split()):
-            minhash.update(word.encode('utf8'))
-        lsh.insert(index, minhash)
-        minhashes[index] = minhash
-
-    print(f"    - MinHashLSH: 已为 {len(df)} 条样本创建索引。正在查询近似副本...")
-    processed_indices, duplicate_indices = set(), set()
-    for index in df.index:
-        if index in processed_indices:
-            continue
-        result = lsh.query(minhashes[index])
-        result.remove(index)
-        duplicate_indices.update(result)
-        
-        # ======================================================================
-        # === 编译器指示修正 (V2) ===
-        # 错误原因: result 是一个 list, 不能与 set 进行 | (并集)运算。
-        # 解决方案: 在运算前，将 list 类型的 result 显式转换为 set。
-        processed_indices.update(set(result) | {index})
-        # ======================================================================
-
-    df_deduped = df.drop(index=list(duplicate_indices))
-    near_deduped_count = len(df_deduped)
-    print(f"    - 近似去重: 移除了 {exact_deduped_count - near_deduped_count} 条近似重复的样本。")
-    return df_deduped
-
-def _clean_and_normalize(df: pd.DataFrame, valid_labels: Set) -> pd.DataFrame:
-    print("  - 阶段B: 清洗与规范化...")
+# --- 分类任务专属辅助函数 ---
+def _clean_and_normalize_classification(df: pd.DataFrame, valid_labels: Set) -> pd.DataFrame:
+    """为分类任务清洗和规范化数据。"""
+    print("  - 阶段B: [分类专属] 清洗与规范化...")
     df['text'] = df['text'].str.lower().str.strip().apply(lambda x: re.sub(r'\s+', ' ', x))
     initial_count = len(df)
     df = df[df['label'].isin(valid_labels) & (df['text'] != '')]
     print(f"    - 过滤无效数据: 移除了 {initial_count - len(df)} 条无效标签或空文本的样本。")
     return df
 
-def _analyze_and_report(df: pd.DataFrame, task_name: str, report_path: Path, config: Dict):
+# --- 通用辅助函数 ---
+def _deep_deduplication(df: pd.DataFrame, is_ner: bool) -> pd.DataFrame:
+    """对数据进行精确去重。"""
+    print("  - 阶段A: 深度去重...")
+    initial_count = len(df)
+    
+    if is_ner:
+        subset_col = 'text_str'
+        df[subset_col] = df['tokens'].apply(lambda x: "".join(x) if isinstance(x, list) else "")
+    else:
+        subset_col = 'text'
+
+    df.drop_duplicates(subset=[subset_col], inplace=True, keep='first')
+    
+    if is_ner:
+        df.drop(columns=[subset_col], inplace=True)
+        
+    deduped_count = len(df)
+    print(f"    - 精确去重: 移除了 {initial_count - deduped_count} 条完全重复的样本。")
+    return df
+
+def _analyze_and_report(df: pd.DataFrame, task_name: str, report_path: Path, is_ner: bool):
+    """生成数据质量报告。"""
     print("  - 阶段C: 多维质量评估...")
-    report = [f"# {task_name} 数据质量分析报告", f"报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-              "\n## 1. 基础统计", f"- 清洗与去重后总样本数: {len(df)}"]
+    report = [f"# {task_name} 数据质量分析报告", f"报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"]
+    report.append(f"\n## 1. 基础统计\n- 清洗与去重后总样本数: {len(df)}")
     
-    report.extend(["\n## 2. 标签分布", df['label'].value_counts().to_markdown()])
-    
-    df['word_count'] = df['text'].apply(lambda x: len(list(jieba.cut(x))))
-    report.extend(["\n## 3. 文本长度分析 (按词)", df['word_count'].describe().to_frame().to_markdown()])
-    
-    report.extend(["\n## 4. 语义多样性分析 (抽样)",
-                   f"（使用模型: {config['DIVERSITY_MODEL']}，每个类别抽样: {config['DIVERSITY_SAMPLE_SIZE']}）"])
-    try:
-        model = SentenceTransformer(config['DIVERSITY_MODEL'])
-        diversity_scores = {}
-        for label in df['label'].unique():
-            label_df = df[df['label'] == label]
-            sample_size = min(len(label_df), config['DIVERSITY_SAMPLE_SIZE'])
-            if sample_size < 2:
-                diversity_scores[label] = "样本过少无法计算"
-                continue
-            sample_embeddings = model.encode(label_df['text'].sample(sample_size, random_state=config['RANDOM_STATE']).tolist(), convert_to_tensor=True)
-            cosine_scores = util.pytorch_cos_sim(sample_embeddings, sample_embeddings).numpy()
-            avg_similarity = np.mean(cosine_scores[np.triu_indices_from(cosine_scores, k=1)])
-            diversity_scores[label] = f"{1 - avg_similarity:.4f} (1 - 平均余弦相似度)"
-        report.append("\n| 类别 | 多样性得分 (越低越相似) |")
-        report.append("|:---|:---:|")
-        for label, score in diversity_scores.items():
-            report.append(f"| {label} | {score} |")
-    except Exception as e:
-        report.append(f"\n计算语义多样性时出错: {e}")
+    if is_ner:
+        all_tags = [tag for tags_list in df['tags'] for tag in tags_list]
+        tag_counts = pd.Series(all_tags).value_counts()
+        report.append("\n## 2. 标签分布 (按Tag)")
+        report.append(tag_counts.to_frame().to_markdown())
+    else:
+        label_counts = df['label'].value_counts()
+        report.append("\n## 2. 标签分布 (按样本)")
+        report.append(label_counts.to_frame().to_markdown())
 
     report_path.write_text("\n".join(report), encoding='utf-8')
     print(f"    - 详细质量报告已保存至: {report_path}")
 
-def _balance_and_split(df: pd.DataFrame, config: Dict) -> (pd.DataFrame, pd.DataFrame):
+def _balance_and_split(df: pd.DataFrame, config: Dict, is_ner: bool) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """拆分数据集，并为分类任务做平衡处理。"""
     print("  - 阶段D: 数据集平衡与拆分...")
-    min_samples = df['label'].value_counts().min()
-    print(f"    - 平衡策略: 对多数类进行欠采样，目标样本数: {min_samples}")
-    balanced_df = df.groupby('label', group_keys=False).apply(lambda x: x.sample(min_samples, random_state=config['RANDOM_STATE']))
-    train_df, test_df = train_test_split(balanced_df, test_size=config['TEST_SET_SIZE'], random_state=config['RANDOM_STATE'], stratify=balanced_df['label'])
+    stratify_col = None
+    if not is_ner:
+        min_samples = df['label'].value_counts().min()
+        print(f"    - [分类专属] 平衡策略: 对多数类进行欠采样，目标样本数: {min_samples}")
+        df = df.groupby('label', group_keys=False).apply(lambda x: x.sample(min_samples, random_state=config['RANDOM_STATE']))
+        stratify_col = df['label']
+
+    train_df, test_df = train_test_split(df, test_size=config['TEST_SET_SIZE'], random_state=config['RANDOM_STATE'], stratify=stratify_col)
     print(f"    - 拆分完成: 训练集 {len(train_df)} 条, 测试集 {len(test_df)} 条。")
     return train_df, test_df
 
-def _process_pipeline(raw_file_path: Path, valid_labels: Set, config_module: Type):
-    """单个任务的完整处理流水线。"""
+def _process_pipeline(raw_file_path: Path, task_config: Dict, config_module: Type, is_ner: bool):
+    """根据任务类型（是否为NER）执行不同的处理流水线。"""
     task_name = raw_file_path.stem.replace('_dataset', '')
     refiner_config = config_module.REFINER_CONFIG
-    reports_dir = config_module.DATA_DIR / "reports"
-    processed_data_dir = config_module.DATA_DIR / "processed"
     
     print(f"\n{'='*25} 开始处理任务: {task_name} {'='*25}")
 
@@ -115,41 +114,56 @@ def _process_pipeline(raw_file_path: Path, valid_labels: Set, config_module: Typ
         print(f"[错误] 原始数据文件不存在: {raw_file_path}，跳过此任务。")
         return
 
-    df = pd.read_json(raw_file_path, lines=True)
+    try:
+        df = pd.read_json(raw_file_path, lines=True)
+    except ValueError as e:
+        print(f"[致命错误] 读取JSONL文件失败: {raw_file_path}。可能是由于API返回了不完整的JSON。错误: {e}")
+        return
+        
     print(f"步骤 1: 从 {raw_file_path.name} 加载了 {len(df)} 行原始数据。")
 
-    df = _deep_deduplication(df, refiner_config)
-    df = _clean_and_normalize(df, valid_labels)
+    df = _deep_deduplication(df, is_ner)
+
+    if is_ner:
+        df = _normalize_ner_data(df)
+    else:
+        df = _clean_and_normalize_classification(df, task_config["valid_labels"])
 
     if df.empty:
         print("[错误] 处理后无有效数据，任务终止。")
         return
 
+    # ======================================================================
+    # === 编译器指示修正 (V4) ===
+    # 错误原因: report_path 变量在使用前未定义。
+    # 解决方案: 在调用 _analyze_and_report 之前，明确定义 report_path。
+    reports_dir = config_module.DATA_DIR / "reports"
     report_path = reports_dir / f"{task_name}_quality_report_{datetime.now().strftime('%Y%m%d')}.md"
-    _analyze_and_report(df, task_name, report_path, refiner_config)
-    train_df, test_df = _balance_and_split(df, refiner_config)
+    # ======================================================================
+    _analyze_and_report(df, task_name, report_path, is_ner)
+    
+    train_df, test_df = _balance_and_split(df, refiner_config, is_ner)
 
     print("\n步骤 6: 保存最终处理结果...")
+    processed_data_dir = config_module.DATA_DIR / "processed"
     train_output_path = processed_data_dir / f"{task_name}_train.jsonl"
     test_output_path = processed_data_dir / f"{task_name}_test.jsonl"
-    train_df[['text', 'label']].to_json(train_output_path, orient='records', lines=True, force_ascii=False)
-    test_df[['text', 'label']].to_json(test_output_path, orient='records', lines=True, force_ascii=False)
+    
+    train_df.to_json(train_output_path, orient='records', lines=True, force_ascii=False)
+    test_df.to_json(test_output_path, orient='records', lines=True, force_ascii=False)
     
     print(f"  - 清理后的训练集 -> {train_output_path}")
     print(f"  - 清理后的测试集 -> {test_output_path}")
     print(f"{'='*25} 任务 {task_name} 处理完毕 {'='*25}\n")
 
-# --- 主引擎入口函数 ---
 def run(config_module: Type):
-    """
-    数据精炼引擎的主入口。
-    :param config_module: 从蓝图加载的配置模块。
-    """
+    """数据精炼引擎的主入口。"""
     data_dir = config_module.DATA_DIR
     (data_dir / "processed").mkdir(parents=True, exist_ok=True)
     (data_dir / "reports").mkdir(parents=True, exist_ok=True)
 
+    is_ner_blueprint = "tag_map" in next(iter(config_module.TASKS.values()))
+
     for task_name, task_config in config_module.TASKS.items():
         raw_file = data_dir / "raw" / f"{task_name}_dataset.jsonl"
-        valid_labels = task_config["valid_labels"]
-        _process_pipeline(raw_file, valid_labels, config_module)
+        _process_pipeline(raw_file, task_config, config_module, is_ner=is_ner_blueprint)

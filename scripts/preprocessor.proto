@@ -1,18 +1,26 @@
-// backend/micromodels/src/proto/preprocessor.proto
+// scripts/preprocessor.proto (V2 - 支持NER)
 syntax = "proto3";
 
 package micromodels;
 
-// 定义单个TF-IDF特征集的数据结构
+// --- V1: 用于TF-IDF分类器的预处理器数据 ---
 message TfidfFeatureData {
-  // 有序的词汇表，其顺序与idf_weights严格对应
   repeated string vocabulary = 1;
-  // 有序的IDF权重
   repeated float idf_weights = 2;
 }
 
-// 定义完整的预处理器数据，包含词和字符两个特征集
-message PreprocessorData {
+message TfidfPreprocessorData {
   TfidfFeatureData word_features = 1;
   TfidfFeatureData char_features = 2;
+}
+
+
+// --- V2: 用于NER序列标注模型的预处理器数据 ---
+message NerPreprocessorData {
+  // 使用 map 类型，key是词，value是索引。
+  // Protobuf的map在序列化时并不保证顺序，但在大多数现代语言的实现中，
+  // 反序列化后通常能反映原始插入顺序或按键排序。
+  // 对于Rust的HashMap，顺序无关紧要，我们只关心键值对的正确性。
+  map<string, int32> word_to_ix = 1;
+  map<string, int32> tag_to_ix = 2;
 }

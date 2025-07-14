@@ -28,3 +28,7 @@ python-dotenv
 grpcio-tools
 # 用于pandas的.to_markdown()功能
 tabulate
+# 用于BiLSTM-CRF模型训练
+torch
+# CRF层的实现
+pytorch-crf
