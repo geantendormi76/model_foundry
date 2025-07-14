@@ -195,15 +195,18 @@ from blueprints.text_classification.config import GENERATOR_CONFIG, REFINER_CONF
             tfidf_classifier_trainer.run(config_module)
         elif args.blueprint == "sequence_tagging_ner":
             print("[提示] BiLSTM-CRF 训练器尚未实现。跳过此步骤。")
-        # ...```
+        # ...
+```
 
 ### 第5步: 铸造！
 
 一切就绪！现在，用一条命令铸造您的全新情感分析模型：
 
+
 ```bash
 python main.py --blueprint sentiment_analysis
 ```
+
 流水线会自动执行所有步骤，最终在`models/`目录下生成`sentiment_classifier.onnx`和`sentiment_preprocessor.bin`！
 
 ### 第6步: 唤醒你的新模型
