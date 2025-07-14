@@ -45,34 +45,33 @@
 
 ## ✨ 核心特性
 
--   **宪法驱动的数据工程：** 首创`prompt_constitutions.py`。**您只需修改“宪法”，即可定制全新的模型！**
--   **全自动流水线：** 从数据生成、提纯、训练、导出到最终验证，一套完整的端到端流程。
--   **工业级数据提纯：** 包含精确去重与基于MinHash的近似去重，以及类别平衡策略。
--   **生产级模型导出：** 最终产出物是跨平台、高性能的`.onnx`格式模型，以及通过**Protocol Buffers (Protobuf)** 序列化的、类型安全且保证顺序的`.bin`预处理器数据。
--   **闭环验证体验：** 提供交互式的“模型唤醒实验室”，让您在Python环境中就能立刻与自己铸造的模型进行对话，所见即所得。
+-   **蓝图驱动 (Blueprint-Driven):** 在`blueprints/`下定义新的模型“蓝图”（宪法+配置），即可轻松扩展，铸造全新架构的模型。
+-   **一键式自动化引擎:** 由`main.py`统一调度，告别繁琐的手动分步执行。
+-   **工业级数据提纯:** 包含精确去重与基于MinHash的近似去重，以及类别平衡策略。
+-   **生产级模型导出:** 最终产出物是跨平台、高性能的`.onnx`格式模型，以及通过**Protocol Buffers (Protobuf)** 序列化的、类型安全且保证顺序的`.bin`预处理器数据，完美适配Rust、C++等高性能环境。
+-   **闭环验证体验:** 提供交互式的“模型唤醒实验室”，让您在Python环境中就能立刻与自己铸造的模型进行对话，所见即所得。
 
 ---
 
-## 🛠️ 流水线详解 (The Pipeline)
+## 🛠️ 架构与流水线 (Architecture & Pipeline)
 
-本铸造厂由`scripts/`目录下的七个核心模块驱动，它们如同一条精密的生产线，环环相扣。
+本铸造厂采用“蓝图(Blueprints) + 引擎(Engine) + 主控(Controller)”的模块化架构。
 
-| 脚本                               | 角色             | 职责                                                                                               |
-| ---------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------- |
-| `prompt_constitutions.py`          | **大宪章/灵魂**  | **项目的核心。** 在这里定义您想让模型学习的一切。修改它，即可创造新模型。                            |
-| `1_generate_datasets.py`           | **矿工**         | 读取“宪法”，调用大模型API，高效、并发地挖掘海量原始训练数据。                                       |
-| `2_refine_and_analyze.py`          | **精炼厂**       | 对原始数据进行深度清洗、去重、平衡和规范化，并产出详细的数据质量分析报告。                           |
-| `3_train_and_evaluate_final.py`    | **铸造炉**       | 使用提纯后的数据，训练高性能的Scikit-learn模型，并将其“铸造”为可部署的`.onnx`和`.joblib`文件。      |
-| `4_verify_models.py`               | **质检实验室**   | 对出厂的`.onnx`和`.joblib`文件进行端到端的“黄金测试集”验证，确保其在Python环境下的行为100%符合预期。       |
-| `5_export_preprocessor_data.py`| **灵魂提取器**   | **跨语言部署的关键桥梁。** 从`.joblib`文件中提取核心数据，并将其**序列化为Protobuf二进制格式 (`.bin`)**。|
-| `6_test_inference_in_python.py`  | **唤醒实验室**   | **最终的狂欢！** 加载最终产物`.onnx`和`.bin`，提供一个交互式命令行，让您能立刻与自己铸造的模型对话。|
-| `7_debug_preprocessor.py`      | **诊断显微镜**   | **跨语言一致性的最终保障。** 对任意文本，打印其“标准答案”向量，用于与Rust等其他语言的实现进行“像素级”对比。|
+| 阶段 (Stage)       | 核心引擎 (Engine Module)                | 职责 (Responsibility)                                                |
+| ------------------ | --------------------------------------- | -------------------------------------------------------------------- |
+| 1. 数据生成        | `foundry_engine/data_generator.py`      | 读取蓝图“宪法”，调用大模型API，高效、并发地挖掘海量原始训练数据。     |
+| 2. 数据精炼        | `foundry_engine/data_refiner.py`        | 对原始数据进行深度清洗、去重、平衡和规范化，并产出详细的数据质量报告。 |
+| 3. 模型训练        | `foundry_engine/trainers/*_trainer.py`  | 根据蓝图配置，调用相应的训练器，培育特定架构的模型。                 |
+| 4. 预处理器导出    | `foundry_engine/exporter.py`            | 将Python预处理器中的核心数据，序列化为跨语言的`.bin` (Protobuf) 文件。 |
 
 ---
 
 ## 📦 最终产出物 (Artifacts)
 
-流水线成功运行后，您将在`models/`目录中找到最终的、可部署到任何地方的产品。
+流水线成功运行后，您将在`models/`目录中找到最终的、可部署到任何地方的产品。对于每个任务（如`is_question`），您会得到：
+
+-   `is_question_classifier.onnx`: ONNX格式的模型文件。
+-   `is_question_preprocessor.bin`: Protobuf格式的预处理器数据文件。
 
 ---
 
@@ -83,45 +82,42 @@
 ### 1. 环境设置
 
 -   克隆本仓库。
--   **安装Protobuf编译器 (`protoc`)**: 这是将`.proto`契约文件编译成代码的核心工具。
-    -   在Ubuntu/WSL上: `sudo apt install protobuf-compiler`
-    -   在macOS上: `brew install protobuf`
 -   **安装Python依赖**:
     ```bash
-    # (可选) 创建并激活一个新的虚拟环境
-    uv venv
-    source .venv/bin/activate
+    # (推荐) 创建并激活一个新的虚拟环境
+    # python -m venv .venv
+    # source .venv/bin/activate
     
-    # 安装所有必需的包
+    # 安装所有必需的包 (我们使用uv，你也可以用pip)
     uv pip install -r requirements.txt
     ```
--   在项目根目录创建`.env`文件，并填入您的Gemini API密钥：
+-   在项目根目录创建`.env`文件，并填入您的Gemini API密钥。您可以使用多个以逗号分隔的密钥来应对速率限制：
     ```
-    GEMINI_API_KEYS=your_api_key_1
+    GEMINI_API_KEYS=your_api_key_1,your_api_key_2
     ```
 
-### 2. 执行全自动生产线
+### 2. 执行一键式自动化生产线
 
-请严格按照以下顺序，在`model_foundry/`根目录下执行脚本：
+告别繁琐的手动操作！现在，只需一条命令即可启动整个流水线。在`model_foundry/`根目录下执行：
 
 ```bash
-# 1. 生成 -> 2. 提纯 -> 3. 训练 -> 4. 验证 -> 5. 导出
-python scripts/1_generate_datasets.py
-python scripts/2_refine_and_analyze.py
-python scripts/3_train_and_evaluate_final.py
-python scripts/4_verify_models.py
-python scripts/5_export_preprocessor_data.py
+# 这将为 "text_classification" 蓝图下的所有任务，完整地执行从数据生成到模型导出的所有步骤。
+python main.py --blueprint text_classification
 ```
+
+> **高级用法:** 您可以使用`--steps`参数来执行特定的步骤，例如，如果您只想重新训练和导出模型：
+> `python main.py --blueprint text_classification --steps=train,export`
+
 恭喜！您已经成功铸造出了两个高精度的微模型，它们的所有必需文件都已位于`models/`目录下。
 
-### 3. 唤醒并测试你的模型！
+### 3. 唤醒并与你的模型对话！
 
-现在，是时候与您亲手创造的AI进行第一次对话了。
+现在，是时候与您亲手创造的AI进行第一次对话了。我们为您准备了一个独立的“唤醒实验室”。
 
--   运行我们为您准备的“唤醒实验室”：
+-   运行交互式测试脚本：
     
     ```bash
-    python scripts/6_test_inference_in_python.py
+    python scripts/interactive_tester.py
     ```
 
 -   **实践测试示例：**

@@ -26,3 +26,5 @@ tqdm
 python-dotenv
 # 用于编译.proto文件的核心工具
 grpcio-tools
+# 用于pandas的.to_markdown()功能
+tabulate

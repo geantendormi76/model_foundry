@@ -110,4 +110,6 @@ models/*.bin
 ehthumbs.db
 Thumbs.db
 .env
-.jsonl
+.jsonl1_export_project_structure.py
+
+1_export_project_structure.py
